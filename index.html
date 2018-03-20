@@ -25,6 +25,7 @@
     <script type="text/javascript" src="js/threeoctree.js"></script>
 	<script type="text/javascript" src="js/controls/TrackballControls.js"></script>
 	<script type="text/javascript" src="js/libs/stats.min.js"></script>
+	<script type="text/javascript" src="js/underscore-min.js"></script>
 	<script>
 		
 		var radius = 100;
@@ -44,7 +45,7 @@
 		var selectedGroup = [];
 		var finalGroup = [];
 		var user_classification = "";
-		var user_setRadius = "1";
+		var user_setRadius = "5";
 		
 		init();
 		animate();
@@ -58,7 +59,7 @@
 			
 				// camera controls
 			controls = new THREE.TrackballControls( camera );
-				controls.rotateSpeed = 1.0;
+				controls.rotateSpeed = 0.5;
 				controls.zoomSpeed = 3;
 				controls.panSpeed = 0.5;
 				controls.noZoom = false;
@@ -89,11 +90,11 @@
 			} );		
 			
 			//upload objects
-			$.get('http://localhost:3000/face.txt', function(data) {
+			$.get('face.txt', function(data) {
 				lines = data.split("\n");
 				var Geometry = new THREE.CubeGeometry( 0.001, 0.001, 0.001 );
 				
-				for(i = 0; i < 10000; i++){
+				for(i = 0; i < 1000; i++){
 					var x = parseFloat(lines[i].split(" ")[0]);
 					var y = parseFloat(lines[i].split(" ")[1]);
 					var z = parseFloat(lines[i].split(" ")[2]);
@@ -228,6 +229,7 @@
 		}
 		
 		function onDocumentMouseClick( event ) {
+			
 			event.preventDefault();
 			// calculate mouse position in normalized device coordinates
 			// (-1 to +1) for both components
@@ -246,8 +248,8 @@
 			//Find all points in octree that from mouse click
 			octreeObjects = octree.search( raycaster.ray.origin, raycaster.ray.far, true, raycaster.ray.direction ); //return an array of objects
 			//Find the number of objects intersect with ray casted
-			intersections = raycaster.intersectOctreeObjects( octreeObjects ); ////return an array of intersected objects
-			console.log(intersections);
+			intersections = raycaster.intersectOctreeObjects( octreeObjects ); ////return an array of intersecting objects that sorted
+			//console.log(intersections);
 			if (intersections.length == 0){
 				return
 			}else{
@@ -259,18 +261,28 @@
 					selectedGroup.push(intersected);
 				}
 
-				//creating ann array containing all distance from selected point to objects in selected octree
+				//creating an array containing all distances from selected point to objects in selected octree and do automatic selection
+				var l = [];
+				//console.log(octreeObjects.length);
 				for (i = 0; i < octreeObjects.length; i++) {	
-					var dist = distanceVector(intersected.position, octreeObjects[i].object.position)
-					if (dist <= user_setRadius){
-						if(octreeObjects[i].object.material.color.getHex() == intersectColor){
-							return
-						}else{
-							octreeObjects[i].object.material.color.setHex(intersectColor);
-							selectedGroup.push(octreeObjects[i].object);
-						}
+					if(octreeObjects[i].object.material.color.getHex() == intersectColor){
+						continue
 					}
+					var o = {};
+					var d = distanceVector(intersected.position, octreeObjects[i].object.position)
+					o["distance"] = d;
+					o["obj"] = octreeObjects[i];
+					l.push(o);
+					}
+				//Sort objects of an array by key
+				var arrObj = _.sortBy(l,"distance");
+				console.log(arrObj);
+				for(i = 0; i < user_setRadius; i++){
+					arrObj[i].obj.object.material.color.setHex(intersectColor);
+					selectedGroup.push(arrObj[i].obj.object);	
 				}
+				//obj.object.material.color.setHex(intersectColor);
+				//selectedGroup.push(obj.object);
 			}
 		}
 		
