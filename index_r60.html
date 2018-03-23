@@ -21,19 +21,13 @@
 
 <body>
 	<script type="text/javascript" src="js/jquery-3.3.1.min.js"></script>
-	<script type="text/javascript" src="js/three.min.js"></script>
+	<script type="text/javascript" src="js/three.min_r60.js"></script>
     <script type="text/javascript" src="js/threeoctree.js"></script>
 	<script type="text/javascript" src="js/controls/TrackballControls.js"></script>
 	<script type="text/javascript" src="js/libs/stats.min.js"></script>
 	<script type="text/javascript" src="js/underscore-min.js"></script>
 	<script>
 		
-		var radius = 100;
-		var radiusMax = radius * 10;
-		var radiusMaxHalf = radiusMax * 0.5;
-		var radiusSearch = radius * 0.75;
-		var totalFaces = 0;
-
 		var camera, scene, renderer;
 		var controls, stats;
 		var octree;
@@ -45,7 +39,7 @@
 		var selectedGroup = [];
 		var finalGroup = [];
 		var user_classification = "";
-		var user_setRadius = "5";
+		var user_setPoints = "5";
 		
 		init();
 		animate();
@@ -92,9 +86,9 @@
 			//upload objects
 			$.get('face.txt', function(data) {
 				lines = data.split("\n");
-				var Geometry = new THREE.CubeGeometry( 0.001, 0.001, 0.001 );
+				var Geometry = new THREE.PlaneGeometry( 0.0015, 0.0015);
 				
-				for(i = 0; i < 1000; i++){
+				for(i = 0; i < lines.length; i++){
 					var x = parseFloat(lines[i].split(" ")[0]);
 					var y = parseFloat(lines[i].split(" ")[1]);
 					var z = parseFloat(lines[i].split(" ")[2]);
@@ -160,15 +154,15 @@
 			// events
 			btn_setClassification.addEventListener( 'click', setClassification, false );
 			btn_downloadPCAT.addEventListener( 'click', exportResultsToCSV, false );
-			btn_setRadius.addEventListener( 'click', setRadius, false );
+			btn_setRadius.addEventListener( 'click', setPoints, false );
 
 			renderer.domElement.addEventListener( 'click', onDocumentMouseClick, false );
 			window.addEventListener( 'resize', onWindowResize, false );
 		}
 
 		//Set classification from user
-		function setRadius(){
-			user_setRadius = window.prompt("Assign finding radius","");		
+		function setPoints(){
+			user_setPoints = window.prompt("Assign finding radius","");		
 		}
 
 		//Set classification from user
@@ -229,7 +223,6 @@
 		}
 		
 		function onDocumentMouseClick( event ) {
-			
 			event.preventDefault();
 			// calculate mouse position in normalized device coordinates
 			// (-1 to +1) for both components
@@ -239,8 +232,12 @@
 			var vector = new THREE.Vector3( mouse.x, mouse.y, 0.5 );
 			projector.unprojectVector( vector, camera );
 
+			var arrO = onRayCasting(vector);
+		}
+		function onRayCasting(vector){
+
 			var raycaster = new THREE.Raycaster( camera.position, vector.sub( camera.position ).normalize() );
-			
+			console.log(raycaster);
 			var octreeObjects;
 			var intersections;
 			var distance = [];
@@ -252,7 +249,7 @@
 			//console.log(intersections);
 			if (intersections.length == 0){
 				return
-			}else{
+			}else{		
 				intersected = intersections[0].object;
 				if(intersected.material.color.getHex() == intersectColor){
 					return
@@ -276,14 +273,12 @@
 					}
 				//Sort objects of an array by key
 				var arrObj = _.sortBy(l,"distance");
-				console.log(arrObj);
-				for(i = 0; i < user_setRadius; i++){
+				for(i = 0; i < user_setPoints; i++){
 					arrObj[i].obj.object.material.color.setHex(intersectColor);
 					selectedGroup.push(arrObj[i].obj.object);	
 				}
-				//obj.object.material.color.setHex(intersectColor);
-				//selectedGroup.push(obj.object);
-			}
+				return arrObj;
+			}	
 		}
 		
 	</script>

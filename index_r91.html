@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+	
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="description" content="">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<style>
+		body {
+			font-family: Monospace;
+			background-color: #f0f0f0;
+			margin: 0px;
+			overflow: hidden;
+		}
+	</style>
+	
+    <title>THREE: Octree!</title>
+
+</head>
+
+<body>
+	<script type="text/javascript" src="js/jquery-3.3.1.min.js"></script>
+	<script type="text/javascript" src="js/three.min_r91.js"></script>
+    <script type="text/javascript" src="js/Octree_r91.js"></script>
+	<script type="text/javascript" src="js/controls/TrackballControls.js"></script>
+	<script type="text/javascript" src="js/libs/stats.min.js"></script>
+	<script type="text/javascript" src="js/underscore-min.js"></script>
+	<script type="text/javascript" src="js/PCDLoader.js"></script>
+	<script>
+		
+		var camera, scene, renderer;
+		var controls, stats;
+		var octree;
+		var objects = [];
+		var intersectColor = 0xFF0000;
+		var projector;
+		var mouse = new THREE.Vector2();
+		var intersected;
+		var selectedGroup = [];
+		var finalGroup = [];
+		var user_classification = "";
+		var user_setPoints = "5";
+		var raycaster = new THREE.Raycaster();
+		
+		init();
+		animate();
+
+		function init() {
+			// standard three scene, camera, renderer
+			scene = new THREE.Scene();
+			scene.background = new THREE.Color( 0xFFFFFF );
+			camera = new THREE.PerspectiveCamera( 15, window.innerWidth / window.innerHeight, 0.01, 40 );
+				camera.position.x = 0.4;
+				camera.position.z = -2;
+				camera.up.set(0,0,1);
+				
+			controls = new THREE.TrackballControls( camera );
+				controls.rotateSpeed = 2.0;
+				controls.zoomSpeed = 3.3;
+				controls.panSpeed = 0.2;
+				controls.noZoom = false;
+				controls.noPan = false;
+				controls.staticMoving = true;
+				controls.dynamicDampingFactor = 0.3;
+				controls.minDistance = 0.3;
+				controls.maxDistance = 0.3 * 100;
+				controls.target.set( 0.4501950144767761, 0.6308149993419647, 0.5991849899291992);
+
+			
+			scene.add( camera );
+			
+			renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+			
+			// create octree
+			octree = new THREE.Octree( {
+				//scene:scene,
+				undeferred: false,
+				// set the max depth of tree
+				depthMax: Infinity,
+				// max number of objects before nodes split or merge
+				objectsThreshold: 500,
+				// percent between 0 and 1 that nodes will overlap each other
+				// helps insert objects that lie over more than one node
+				overlapPct: 0.15
+			} );		
+			
+			//upload objects
+			$.get('face.txt', function(data) {
+				lines = data.split("\n");
+				var Geometry = new THREE.PlaneGeometry( 0.0015, 0.0015);
+				
+				for(i = 0; i < lines.length; i++){
+					var x = parseFloat(lines[i].split(" ")[0]);
+					var y = parseFloat(lines[i].split(" ")[1]);
+					var z = parseFloat(lines[i].split(" ")[2]);
+					
+					var material = new THREE.MeshBasicMaterial( {color: 0x000000, side: THREE.DoubleSide} );
+					
+					mesh = new THREE.Mesh( Geometry, material );
+					mesh.position.set(x,y,z);
+					
+					octree.add( mesh, { useFaces: false } );
+					scene.add( mesh );
+					objects.push( mesh );
+				}
+			}, 'text');
+					
+						
+			// stats
+			stats = new Stats();
+				stats.domElement.style.position = 'absolute';
+				stats.domElement.style.top = '0';
+				stats.domElement.style.left = '0';
+				stats.domElement.style.zIndex = 100;
+			document.body.appendChild( stats.domElement );
+			
+			// bottom container
+			var container = document.createElement( 'div' );
+				container.style.position = 'absolute';
+				container.style.bottom = '0';
+				container.style.width = '100%';
+				container.style.textAlign = 'center';
+			document.body.appendChild( container );
+			
+			// octree use toggle
+			var toggle = document.createElement( 'div' );
+				toggle.style.position = 'absolute';
+				toggle.style.bottom = '100%';
+				toggle.style.width = '100%';
+				toggle.style.padding = '10px';
+				toggle.style.background = '#FFFFFF';
+			container.appendChild( toggle );
+			
+			//Create assign radius btn
+			var btn_setRadius = document.createElement("BUTTON");
+			var text_r = document.createTextNode("ASSIGN FINDING POINTS");
+			btn_setRadius.appendChild(text_r);
+
+			//Create assign classification btn
+			var btn_setClassification = document.createElement("BUTTON");
+			var text_c = document.createTextNode("ASSIGN CLASSIFICATION");
+			btn_setClassification.appendChild(text_c);
+			
+			//Create download btn
+			var btn_downloadPCAT = document.createElement("BUTTON");
+			var text_d = document.createTextNode("DOWNLOAD PCAT");
+			btn_downloadPCAT.appendChild(text_d);
+
+			toggle.appendChild(btn_setRadius);
+			toggle.appendChild(btn_setClassification);
+			toggle.appendChild(btn_downloadPCAT);
+			
+			// events
+			btn_setClassification.addEventListener( 'click', setClassification, false );
+			btn_downloadPCAT.addEventListener( 'click', exportResultsToCSV, false );
+			btn_setRadius.addEventListener( 'click', setPoints, false );
+
+			renderer.domElement.addEventListener( 'dblclick', onDocumentMouseClick, false );
+			
+			window.addEventListener( 'resize', onWindowResize, false );
+		}
+
+		//Set classification from user
+		function setPoints(){
+			user_setPoints = window.prompt("Assign finding radius","");		
+		}
+
+		//Set classification from user
+		function setClassification(){
+			user_classification = window.prompt("Assign classification for selected points","");
+			var object = {};
+			object[user_classification] = selectedGroup;
+			finalGroup.push(object);
+			selectedGroup = [];		
+		}
+
+		//Export to csv file
+		function exportResultsToCSV(){
+			var csv = '';
+			finalGroup.forEach(function(row) {
+				key = Object.keys(row)[0];
+				value = Object.values(row)[0]
+				for (i=0; i < value.length; i++){
+					var vector3 = value[i].position;
+					csv = csv + key + '|' + vector3.x + '|' + vector3.y + '|' + vector3.z + "\r\n"
+				};
+			});
+			console.log(csv);
+			var hiddenElement = document.createElement('a');
+			hiddenElement.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
+			hiddenElement.target = '_blank';
+			hiddenElement.download = 'PCAT.csv';
+			hiddenElement.click();
+		}
+
+		function animate() {
+			// note: three.js includes requestAnimationFrame shim			
+			requestAnimationFrame( animate );			
+			render();			
+			stats.update();
+		}
+		
+		function render() {
+			controls.update();
+			renderer.render( scene, camera );
+			// update octree post render
+			// this ensures any objects being added
+			// have already had their matrices updated
+			octree.update();
+		}
+		
+		function onWindowResize() {
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+			renderer.setSize( window.innerWidth, window.innerHeight );
+		}
+
+		function distanceVector(v1, v2){
+			var dx = v1.x - v2.x;
+			var dy = v1.y - v2.y;
+			var dz = v1.z - v2.z;
+			return Math.sqrt( dx * dx + dy * dy + dz * dz );
+		}
+		
+		//Convert from World coordinate to Screen Coordinate
+		function deteremineScreenCoordinate(object) {
+			var vector = new THREE.Vector3();
+			vector.setFromMatrixPosition(object.matrixWorld);
+			vector.project(camera);
+			var width = window.innerWidth, height = window.innerHeight;
+			var widthHalf = width / 2, heightHalf = height / 2;
+			vector.x = ( vector.x * widthHalf ) + widthHalf;
+			vector.y = -( vector.y * heightHalf ) + heightHalf;
+			return vector;
+		}
+
+		var signal = false;
+		function onDocumentMouseClick( event ) {
+			event.preventDefault();
+			signal = !signal;
+			if(signal == true){
+				// calculate mouse position in normalized device coordinates (NCD)
+				// (-1 to +1) for both components
+				mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+				mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+				raycaster.setFromCamera( mouse, camera );
+				onRayCasting(raycaster);
+				renderer.domElement.addEventListener( 'mousemove', onMouseMove, false );
+			}else{
+				renderer.domElement.removeEventListener( 'mousemove', onMouseMove, false );
+			}	
+		}
+		
+		function onMouseMove(){
+			mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+			mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+			raycaster.setFromCamera( mouse, camera );
+			onRayCasting(raycaster);
+		}
+
+		function onRayCasting(raycaster){
+
+			var octreeObjects;
+			var intersections;
+			var distance = [];
+			
+			//Find all points in octree that from mouse click
+			octreeObjects = octree.search( raycaster.ray.origin, raycaster.ray.far, true, raycaster.ray.direction ); //return an array of objects
+			//Find the number of objects intersect with ray casted
+			intersections = raycaster.intersectOctreeObjects( octreeObjects ); ////return an array of intersecting objects that sorted
+			//console.log(octreeObjects);
+			if (intersections.length == 0){
+				return
+			}else{		
+				intersected = intersections[0].object;
+				if(intersected.material.color.getHex() == intersectColor){
+					return
+				}else{
+					intersected.material.color.setHex(intersectColor);
+					selectedGroup.push(intersected);
+				}
+
+				//creating an array containing all distances from selected point to objects in selected octree and do automatic selection
+				var l = [];
+				//console.log(octreeObjects.length);
+				for (i = 0; i < octreeObjects.length; i++) {	
+					if(octreeObjects[i].object.material.color.getHex() == intersectColor){
+						continue
+					}
+					var o = {};
+					var d = distanceVector(intersected.position, octreeObjects[i].object.position)
+					o["distance"] = d;
+					o["obj"] = octreeObjects[i];
+					l.push(o);
+					}
+				//Sort objects of an array by key
+				var arrObj = _.sortBy(l,"distance");
+				for(i = 0; i < user_setPoints; i++){
+					arrObj[i].obj.object.material.color.setHex(intersectColor);
+					selectedGroup.push(arrObj[i].obj.object);	
+				}
+			}	
+		}
+		
+	</script>
+</body>
+
+</html>
