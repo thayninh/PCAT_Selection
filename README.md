@@ -4,7 +4,7 @@ Step 1: Clone the source code from github;
 
 Step 2: Move to PCAT_Selection folder, in cmd type “node server.js”. Server will be run under port 3000;
 
-Step 3: Open Chrome browser and type localhost:3000. A simple GUI appear with small point cloud and 3 basic button;
+Step 3: Open Chrome browser and type localhost:3000. A simple GUI appear with small point cloud and 3 basic buttons;
 
 Step 4: Use button “Assign Finding Points” to determine how many points, which are near the location of mouse will be selected;
 
